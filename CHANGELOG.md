@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zotero SQLite opens with a lock-tolerant read path (`immutable=1` fallback when Zotero is running)
 - `SeenCache` resolves its default path at construction time (test-friendly)
 - README: reproducible env install, Zotero recommend docs, and testing section
+- Test CI workflow: Python 3.10–3.12 matrix, concurrency, coverage artifact, status badge
 
 ### Fixed
 - Silent empty Zotero reads when the database is locked by a running Zotero process

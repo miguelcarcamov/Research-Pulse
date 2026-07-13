@@ -34,6 +34,8 @@ pip install -e ".[all]"
 
 ## Tests
 
+[![Tests](https://github.com/miguelcarcamov/Research-Pulse/actions/workflows/test.yml/badge.svg)](https://github.com/miguelcarcamov/Research-Pulse/actions/workflows/test.yml)
+
 ```bash
 pip install -e ".[test]"
 pytest                         # unit + integration (default paths)
@@ -42,7 +44,9 @@ pytest -m integration          # multi-module flows (mocked network)
 pytest --cov=research_agent --cov-report=term-missing
 ```
 
-Tests live under `tests/unit/` and `tests/integration/`. CI runs them on every push/PR (`.github/workflows/test.yml`). No live API calls in the default suite.
+Tests live under `tests/unit/` and `tests/integration/`. CI runs the suite on push/PR via `.github/workflows/test.yml` (Python 3.10–3.12). No live API calls in the default suite.
+
+> **Note:** `daily.yml` and `publish-pypi.yml` are operational/release workflows (need secrets). They are separate from PR test CI.
 
 ## Usage
 
