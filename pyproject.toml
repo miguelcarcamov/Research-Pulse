@@ -61,9 +61,15 @@ dev = [
     "build>=1.0.0",
     "twine>=4.0.0",
     "flask>=2.0.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
 ]
 all = [
     "flask>=2.0.0",
+]
+test = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
 ]
 
 [project.scripts]
@@ -87,3 +93,28 @@ research_agent = [
     "bundled/config/*.csv",
     "bundled/templates/*.j2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"
+markers = [
+    "unit: fast isolated unit tests",
+    "integration: multi-module tests with mocks (no live network)",
+    "network: optional tests that hit real APIs (skipped by default)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["research_agent"]
+omit = [
+    "research_agent/web.py",
+    "research_agent/setup.py",
+    "research_agent/bundled/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

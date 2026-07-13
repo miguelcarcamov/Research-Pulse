@@ -54,6 +54,8 @@ CLI_COMMANDS: List[Tuple[str, str, str]] = [
     ("conferences", "CORE venue list", "Ranked conferences & journals"),
     ('follow "field"', "Follow any topic", "Plain English, no config"),
     ("topics", "Manage topics", "View or pick from 31+ domains"),
+    ("zotero", "Detect topics", "From your local Zotero library"),
+    ("zotero recommend", "Newer bibliography", "Papers related to your Zotero items"),
     ("config papers N", "Digest size", "Set papers per topic (1–25, default 5)"),
     ("chat", "Interactive agent", "Compare, insights, memory"),
     ("help", "Command reference", "Full list of options"),

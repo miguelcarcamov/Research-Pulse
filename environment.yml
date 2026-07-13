@@ -1,0 +1,28 @@
+# ResearchPulse — runtime environment (conda / mamba / micromamba)
+#
+# Create and activate:
+#   micromamba create -y -f environment.yml
+#   micromamba activate research-pulse
+#
+#   # or: mamba env create -f environment.yml && mamba activate research-pulse
+#   # or: conda  env create -f environment.yml && conda  activate research-pulse
+#
+# Then install the package:
+#   pip install -e .                 # from a git clone (recommended for development)
+#   pip install research-pulse       # from PyPI
+#   pip install -e ".[web]"          # optional Flask agent UI
+#
+# For packaging / Flask extras, use environment-dev.yml instead.
+
+name: research-pulse
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - requests>=2.31.0
+  - feedparser>=6.0.11
+  - pyyaml>=6.0.1
+  - jinja2>=3.1.3
+  - python-dateutil>=2.9.0
+  - rich>=13.0

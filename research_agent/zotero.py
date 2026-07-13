@@ -19,12 +19,46 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import sqlite3
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from .config import load_topics
+
+
+@dataclass
+class ZoteroItem:
+    """A library item used as a recommendation seed."""
+
+    item_id: int
+    title: str
+    doi: str = ""
+    authors: List[str] = field(default_factory=list)
+    year: Optional[int] = None
+    date_raw: str = ""
+
+
+def _connect_ro(db_path: Path) -> Optional[sqlite3.Connection]:
+    """Open zotero.sqlite read-only, tolerating a live Zotero lock.
+
+    Prefer a normal read-only URI; if the DB is locked (Zotero running),
+    fall back to ``immutable=1`` so we can still read without waiting.
+    """
+    attempts = (
+        f"file:{db_path}?mode=ro",
+        f"file:{db_path}?mode=ro&immutable=1",
+    )
+    for uri in attempts:
+        try:
+            conn = sqlite3.connect(uri, uri=True, timeout=2.0)
+            conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
+            return conn
+        except sqlite3.Error:
+            continue
+    return None
 
 
 # ── Locate the Zotero database ──────────────────────────────────────────
@@ -74,38 +108,46 @@ def find_zotero_db() -> Optional[Path]:
 
 def _read_tags(db_path: Path) -> List[str]:
     """Read all item tags from the Zotero database."""
+    conn = _connect_ro(db_path)
+    if conn is None:
+        return []
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         cursor = conn.execute(
             "SELECT t.name FROM tags t "
             "JOIN itemTags it ON t.tagID = it.tagID "
             "GROUP BY t.name ORDER BY COUNT(*) DESC"
         )
         tags = [row[0] for row in cursor.fetchall() if row[0]]
-        conn.close()
         return tags
     except sqlite3.Error:
         return []
+    finally:
+        conn.close()
 
 
 def _read_collections(db_path: Path) -> List[str]:
     """Read all collection names from the Zotero database."""
+    conn = _connect_ro(db_path)
+    if conn is None:
+        return []
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         cursor = conn.execute(
             "SELECT collectionName FROM collections ORDER BY collectionName"
         )
         names = [row[0] for row in cursor.fetchall() if row[0]]
-        conn.close()
         return names
     except sqlite3.Error:
         return []
+    finally:
+        conn.close()
 
 
 def _read_titles(db_path: Path, limit: int = 200) -> List[str]:
     """Read recent item titles to supplement tag-based detection."""
+    conn = _connect_ro(db_path)
+    if conn is None:
+        return []
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         cursor = conn.execute(
             "SELECT iv.value FROM itemDataValues iv "
             "JOIN itemData id ON iv.valueID = id.valueID "
@@ -115,22 +157,205 @@ def _read_titles(db_path: Path, limit: int = 200) -> List[str]:
             (limit,)
         )
         titles = [row[0] for row in cursor.fetchall() if row[0]]
-        conn.close()
         return titles
     except sqlite3.Error:
         return []
+    finally:
+        conn.close()
 
 
 def _read_item_count(db_path: Path) -> int:
     """Count the total number of items in the library."""
+    conn = _connect_ro(db_path)
+    if conn is None:
+        return 0
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         cursor = conn.execute("SELECT COUNT(*) FROM items WHERE itemTypeID != 1")
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count
+        return cursor.fetchone()[0]
     except sqlite3.Error:
         return 0
+    finally:
+        conn.close()
+
+
+def _normalize_doi(doi: str) -> str:
+    if not doi:
+        return ""
+    d = doi.strip()
+    for prefix in ("https://doi.org/", "http://doi.org/", "doi:", "DOI:"):
+        if d.lower().startswith(prefix.lower()):
+            d = d[len(prefix):]
+            break
+    return d.strip().rstrip(".").lower()
+
+
+def _parse_year(date_raw: str) -> Optional[int]:
+    if not date_raw:
+        return None
+    m = re.search(r"(19|20)\d{2}", date_raw)
+    if not m:
+        return None
+    try:
+        return int(m.group(0))
+    except ValueError:
+        return None
+
+
+def _field_map(conn: sqlite3.Connection) -> Dict[str, int]:
+    """Map fieldName -> fieldID for title/DOI/date."""
+    rows = conn.execute(
+        "SELECT fieldName, fieldID FROM fields "
+        "WHERE fieldName IN ('title', 'DOI', 'date')"
+    ).fetchall()
+    return {name: fid for name, fid in rows}
+
+
+def read_library_items(db_path: Optional[Path] = None,
+                       limit: int = 50,
+                       prefer_doi: bool = True) -> List[ZoteroItem]:
+    """Read recent library items (title, DOI, authors, year) as seeds.
+
+    Skips attachments and notes. Prefers items that have a DOI when
+    ``prefer_doi`` is True (DOI-backed seeds yield better related/citing hits).
+    """
+    if db_path is None:
+        db_path = find_zotero_db()
+    if db_path is None:
+        return []
+
+    conn = _connect_ro(db_path)
+    if conn is None:
+        return []
+
+    try:
+        fields = _field_map(conn)
+        title_fid = fields.get("title")
+        doi_fid = fields.get("DOI")
+        date_fid = fields.get("date")
+        if title_fid is None:
+            return []
+
+        # itemTypeID 1 = note in classic schemas; also exclude by typeName.
+        rows = conn.execute(
+            """
+            SELECT i.itemID,
+                   title_v.value AS title,
+                   doi_v.value AS doi,
+                   date_v.value AS date_raw
+            FROM items i
+            JOIN itemTypes it ON i.itemTypeID = it.itemTypeID
+            LEFT JOIN itemData title_d
+                   ON i.itemID = title_d.itemID AND title_d.fieldID = ?
+            LEFT JOIN itemDataValues title_v ON title_d.valueID = title_v.valueID
+            LEFT JOIN itemData doi_d
+                   ON i.itemID = doi_d.itemID AND doi_d.fieldID = ?
+            LEFT JOIN itemDataValues doi_v ON doi_d.valueID = doi_v.valueID
+            LEFT JOIN itemData date_d
+                   ON i.itemID = date_d.itemID AND date_d.fieldID = ?
+            LEFT JOIN itemDataValues date_v ON date_d.valueID = date_v.valueID
+            WHERE it.typeName NOT IN ('attachment', 'note', 'annotation')
+              AND title_v.value IS NOT NULL
+              AND TRIM(title_v.value) != ''
+            ORDER BY i.itemID DESC
+            LIMIT ?
+            """,
+            (title_fid, doi_fid or -1, date_fid or -1, max(limit * 3, limit)),
+        ).fetchall()
+
+        items: List[ZoteroItem] = []
+        item_ids: List[int] = []
+        for item_id, title, doi, date_raw in rows:
+            doi_n = _normalize_doi(doi or "")
+            items.append(ZoteroItem(
+                item_id=int(item_id),
+                title=" ".join((title or "").split()),
+                doi=doi_n,
+                year=_parse_year(date_raw or ""),
+                date_raw=date_raw or "",
+            ))
+            item_ids.append(int(item_id))
+
+        # Authors in one query
+        if item_ids:
+            placeholders = ",".join("?" * len(item_ids))
+            creator_rows = conn.execute(
+                f"""
+                SELECT ic.itemID, c.firstName, c.lastName
+                FROM itemCreators ic
+                JOIN creators c ON ic.creatorID = c.creatorID
+                WHERE ic.itemID IN ({placeholders})
+                ORDER BY ic.itemID, ic.orderIndex
+                """,
+                item_ids,
+            ).fetchall()
+            authors_by_id: Dict[int, List[str]] = {}
+            for iid, first, last in creator_rows:
+                name = " ".join(p for p in (first or "", last or "") if p).strip()
+                if name:
+                    authors_by_id.setdefault(int(iid), []).append(name)
+            for item in items:
+                item.authors = authors_by_id.get(item.item_id, [])
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+
+    if prefer_doi:
+        with_doi = [i for i in items if i.doi]
+        without = [i for i in items if not i.doi]
+        items = with_doi + without
+
+    return items[:limit]
+
+
+def library_identifiers(db_path: Optional[Path] = None,
+                        limit: int = 5000) -> Tuple[Set[str], Set[str]]:
+    """Return (dois, normalized_titles) already present in the library."""
+    if db_path is None:
+        db_path = find_zotero_db()
+    if db_path is None:
+        return set(), set()
+
+    dois: Set[str] = set()
+    titles: Set[str] = set()
+    conn = _connect_ro(db_path)
+    if conn is None:
+        return dois, titles
+    try:
+        fields = _field_map(conn)
+        title_fid = fields.get("title")
+        doi_fid = fields.get("DOI")
+        if title_fid is not None:
+            for (title,) in conn.execute(
+                """
+                SELECT v.value FROM itemData d
+                JOIN itemDataValues v ON d.valueID = v.valueID
+                WHERE d.fieldID = ?
+                LIMIT ?
+                """,
+                (title_fid, limit),
+            ):
+                key = re.sub(r"[^a-z0-9]", "", (title or "").lower())
+                if key:
+                    titles.add(key)
+        if doi_fid is not None:
+            for (doi,) in conn.execute(
+                """
+                SELECT v.value FROM itemData d
+                JOIN itemDataValues v ON d.valueID = v.valueID
+                WHERE d.fieldID = ?
+                LIMIT ?
+                """,
+                (doi_fid, limit),
+            ):
+                n = _normalize_doi(doi or "")
+                if n:
+                    dois.add(n)
+    except sqlite3.Error:
+        return dois, titles
+    finally:
+        conn.close()
+    return dois, titles
 
 
 # ── Map Zotero data to ResearchPulse topics ──────────────────────────────
@@ -214,13 +439,15 @@ def get_zotero_summary(db_path: Optional[Path] = None) -> Optional[Dict]:
     if db_path is None:
         return None
 
+    tags = _read_tags(db_path)
+    collections = _read_collections(db_path)
     return {
         "db_path": str(db_path),
         "item_count": _read_item_count(db_path),
-        "tag_count": len(_read_tags(db_path)),
-        "collection_count": len(_read_collections(db_path)),
-        "top_tags": _read_tags(db_path)[:15],
-        "collections": _read_collections(db_path),
+        "tag_count": len(tags),
+        "collection_count": len(collections),
+        "top_tags": tags[:15],
+        "collections": collections,
     }
 
 

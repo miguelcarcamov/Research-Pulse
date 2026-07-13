@@ -11,7 +11,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List, Set
+from typing import Iterable, List, Optional, Set
 
 from .config import ROOT
 
@@ -26,8 +26,9 @@ def _normalize(paper_id: str) -> str:
 
 
 class SeenCache:
-    def __init__(self, path: Path = DEFAULT_PATH):
-        self.path = path
+    def __init__(self, path: Optional[Path] = None):
+        # Resolve DEFAULT_PATH at call time so tests can monkeypatch it.
+        self.path = DEFAULT_PATH if path is None else path
         self._ids: List[str] = []
         self._set: Set[str] = set()
         self.last_run = None

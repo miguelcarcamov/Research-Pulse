@@ -14,6 +14,36 @@ Or with pipx (Mac/Linux):
 pipx install research-pulse
 ```
 
+### Reproducible env (micromamba / mamba / conda)
+
+Pinned, conda-forge environments for local clones:
+
+```bash
+# Runtime
+micromamba create -y -f environment.yml
+micromamba activate research-pulse
+pip install -e .
+
+# Dev / packaging (+ Flask UI, build, twine)
+micromamba create -y -f environment-dev.yml
+micromamba activate research-pulse-dev
+pip install -e ".[all]"
+```
+
+`mamba env create -f …` or `conda env create -f …` work the same way. Python is pinned to **3.11** (same as CI).
+
+## Tests
+
+```bash
+pip install -e ".[test]"
+pytest                         # unit + integration (default paths)
+pytest -m unit                 # fast isolated tests
+pytest -m integration          # multi-module flows (mocked network)
+pytest --cov=research_agent --cov-report=term-missing
+```
+
+Tests live under `tests/unit/` and `tests/integration/`. CI runs them on every push/PR (`.github/workflows/test.yml`). No live API calls in the default suite.
+
 ## Usage
 
 ```bash
@@ -33,6 +63,7 @@ research-pulse help                     # All commands
 
 - Fetches papers from **arXiv, OpenAlex, Europe PMC, bioRxiv, Crossref, Semantic Scholar**
 - **Auto-detects topics** from your Zotero library (if installed)
+- **Recommends newer papers** related to items already in your Zotero bibliography
 - Opens a clean HTML digest in your browser
 - Tracks your reading history and ratings
 - 31 built-in research domains (AI, NLP, medicine, physics, etc.)
@@ -59,8 +90,13 @@ If you have [Zotero](https://www.zotero.org/) installed, topics are auto-detecte
 ```bash
 research-pulse zotero              # See detected topics
 research-pulse zotero --apply      # Re-sync digest topics from Zotero
+research-pulse zotero recommend    # Newer papers related to your library
+# aliases: research-pulse recommend
 ```
 
+`zotero recommend` reads recent library items (preferring DOIs), queries OpenAlex for related and citing work, and filters out anything you already own. Options: `--limit 10`, `--seeds 12`, `--days 730`.
+
+Set `ZOTERO_DATA_DIR` if your library lives outside the default location.
 ## Topics
 
 Set topics with **IDs** (the short names in parentheses), not display labels:

@@ -286,7 +286,29 @@ def search_by_topic(topic_id: str, days: int = 7, limit: int = 10) -> List[Paper
     settings = load_settings()
     secrets = load_secrets()
 
+    # Non-arXiv sources in parallel; arXiv separate (polite delay).
     papers: List[Paper] = []
+    jobs = []
+    if topic.biorxiv:
+        jobs.append(lambda: biorxiv.fetch(topic.biorxiv, lookback_days=days))
+    if topic.openalex:
+        jobs.append(lambda: openalex.fetch(
+            topic.openalex,
+            lookback_days=days,
+            mailto=secrets.sender_email,
+        ))
+    if topic.semanticscholar:
+        jobs.append(lambda: semanticscholar.fetch(topic.semanticscholar, lookback_days=days))
+    if topic.europepmc:
+        jobs.append(lambda: europepmc.fetch(topic.europepmc, lookback_days=days))
+
+    if jobs:
+        with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+            for fut in as_completed([pool.submit(j) for j in jobs]):
+                try:
+                    papers += fut.result()
+                except Exception:
+                    continue
 
     if topic.arxiv:
         papers += arxiv.fetch(
@@ -295,23 +317,6 @@ def search_by_topic(topic_id: str, days: int = 7, limit: int = 10) -> List[Paper
             delay=settings.arxiv_request_delay,
         )
 
-    if topic.biorxiv:
-        papers += biorxiv.fetch(topic.biorxiv, lookback_days=days)
-
-    if topic.openalex:
-        papers += openalex.fetch(
-            topic.openalex,
-            lookback_days=days,
-            mailto=secrets.sender_email,
-        )
-
-    if topic.semanticscholar:
-        papers += semanticscholar.fetch(topic.semanticscholar, lookback_days=days)
-
-    if topic.europepmc:
-        papers += europepmc.fetch(topic.europepmc, lookback_days=days)
-
-    # Deduplicate
     unique = _dedup(papers)
 
     # Score and rank using BM25

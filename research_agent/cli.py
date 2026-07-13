@@ -259,8 +259,64 @@ def cmd_topics(args: List[str]) -> int:
     return 0
 
 
+def cmd_zotero_recommend(rest: List[str]) -> int:
+    """Recommend newer papers based on the local Zotero bibliography."""
+    limit = 10
+    seeds = 12
+    days = 730
+    i = 0
+    while i < len(rest):
+        arg = rest[i]
+        if arg in ("--limit", "-n") and i + 1 < len(rest):
+            try:
+                limit = max(1, min(50, int(rest[i + 1])))
+            except ValueError:
+                ui.warn(f"Invalid --limit: {rest[i + 1]}")
+            i += 2
+        elif arg == "--seeds" and i + 1 < len(rest):
+            try:
+                seeds = max(1, min(40, int(rest[i + 1])))
+            except ValueError:
+                ui.warn(f"Invalid --seeds: {rest[i + 1]}")
+            i += 2
+        elif arg == "--days" and i + 1 < len(rest):
+            try:
+                days = max(30, min(3650, int(rest[i + 1])))
+            except ValueError:
+                ui.warn(f"Invalid --days: {rest[i + 1]}")
+            i += 2
+        else:
+            i += 1
+
+    from .zotero import find_zotero_db
+    from .zotero_recommend import format_library_recommendations, recommend_from_zotero
+
+    if not find_zotero_db():
+        ui.warn("Zotero database not found.")
+        ui.info("Install Zotero or set ZOTERO_DATA_DIR to your data folder.")
+        return 1
+
+    ui.banner("Newer papers from your Zotero library")
+    ui.info(f"Expanding {seeds} seed item(s) · up to {limit} recommendations")
+
+    with ui.quiet_logs(), ui.spinner("Querying OpenAlex for related & citing work"):
+        recs = recommend_from_zotero(limit=limit, seeds=seeds, lookback_days=days)
+
+    if not recs:
+        ui.warn("No new recommendations found.")
+        ui.info("Items with DOIs work best. Try: research-pulse zotero")
+        return 1
+
+    print(format_library_recommendations(recs))
+    ui.success(f"{len(recs)} paper(s) not already in your library")
+    return 0
+
+
 def cmd_zotero(rest: List[str]) -> int:
-    """Detect Zotero library topics; optionally apply them to the digest."""
+    """Detect Zotero library topics; recommend newer papers; optionally apply topics."""
+    if rest and rest[0] in ("recommend", "recs", "new"):
+        return cmd_zotero_recommend(rest[1:])
+
     apply = "--apply" in rest or "-a" in rest
     if apply:
         from .zotero import detect_topics, find_zotero_db
@@ -483,9 +539,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if cmd == "zotero":
         return cmd_zotero(rest)
 
+    if cmd in ("recommend", "recs"):
+        return cmd_zotero_recommend(rest)
+
     if cmd in ("follow", "add"):
         return cmd_follow(rest)
-
     if cmd in ("chat", "agent"):
         from .agent import run_agent
         return run_agent()

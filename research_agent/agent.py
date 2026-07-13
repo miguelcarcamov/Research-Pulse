@@ -479,10 +479,26 @@ def cmd_insights(papers: List[Paper], memory: ResearchMemory) -> None:
     print(format_insights(insights))
 
 
-def cmd_recommend(papers: List[Paper], memory: ResearchMemory) -> None:
-    """Get personalized recommendations."""
+def cmd_recommend(papers: List[Paper], memory: ResearchMemory,
+                  args: str = "") -> None:
+    """Get personalized recommendations (memory) or from Zotero library."""
+    mode = (args or "").strip().lower()
+    if mode in ("zotero", "library", "from-zotero", "--zotero"):
+        from .zotero import find_zotero_db
+        from .zotero_recommend import (
+            format_library_recommendations,
+            recommend_from_zotero,
+        )
+        if not find_zotero_db():
+            print("Zotero database not found. Set ZOTERO_DATA_DIR if needed.")
+            return
+        print("\nFinding newer papers related to your Zotero library...")
+        recs = recommend_from_zotero(limit=10, seeds=12)
+        print(format_library_recommendations(recs))
+        return
+
     if not papers:
-        print("No papers available. Search for papers first.")
+        print("No papers available. Search first, or try: recommend zotero")
         return
 
     print(f"\nGenerating recommendations based on your profile...")
@@ -576,7 +592,8 @@ PAPER COMMANDS:
 
 INSIGHT COMMANDS:
   insights              Get insights from recent papers
-  recommend             Get personalized recommendations
+  recommend             Get personalized recommendations (from last search)
+  recommend zotero      Newer papers related to your Zotero library
   briefing              Get daily research briefing
 
 MEMORY COMMANDS:
@@ -715,7 +732,7 @@ def run_agent() -> int:
                 cmd_insights(last_papers, memory)
 
             elif command == "recommend":
-                cmd_recommend(last_papers, memory)
+                cmd_recommend(last_papers, memory, args)
 
             elif command == "briefing":
                 cmd_briefing(last_papers, memory)
