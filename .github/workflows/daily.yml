@@ -38,6 +38,10 @@ jobs:
 
       - name: Run digest
         env:
+          # Personal single-recipient mode (preferred for solo use).
+          DIGEST_EMAIL: ${{ secrets.DIGEST_EMAIL }}
+          DIGEST_TOPICS: ${{ secrets.DIGEST_TOPICS }}
+          # Or a published subscribers CSV (multi-recipient).
           SUBSCRIBERS_CSV_URL: ${{ secrets.SUBSCRIBERS_CSV_URL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

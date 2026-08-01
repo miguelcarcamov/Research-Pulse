@@ -160,6 +160,55 @@ topics:
     biorxiv: []
     openalex: "astronomy astrophysics"
 
+  # ── Radio astronomy & computational imaging (SKA / ALMA / interferometry) ─
+  - id: radio-astronomy
+    label: "Radio Astronomy"
+    keywords: ["radio astronomy", "SKA", "ALMA", "MeerKAT", "radio telescope", "cosmic magnetism", "Faraday"]
+    arxiv: ["astro-ph.IM", "astro-ph.GA", "astro-ph.HE"]
+    biorxiv: []
+    openalex: "radio astronomy SKA cosmic magnetism"
+    semanticscholar: "radio astronomy Faraday tomography cosmic magnetism"
+
+  - id: radio-interferometry
+    label: "Radio Interferometry"
+    keywords: ["interferometry", "visibility", "baseline", "aperture synthesis", "calibration", "uv-plane"]
+    arxiv: ["astro-ph.IM"]
+    biorxiv: []
+    openalex: "radio interferometry aperture synthesis"
+    semanticscholar: "radio interferometry visibilities calibration"
+
+  - id: image-synthesis
+    label: "Astronomical Image Synthesis"
+    keywords: ["image synthesis", "CLEAN", "maximum entropy", "MEM", "deconvolution", "interferometric imaging"]
+    arxiv: ["astro-ph.IM"]
+    biorxiv: []
+    openalex: "radio interferometric image synthesis deconvolution"
+    semanticscholar: "interferometric image synthesis CLEAN maximum entropy"
+
+  - id: image-formation
+    label: "Image Formation"
+    keywords: ["image formation", "imaging model", "forward model", "measurement operator", "point spread function"]
+    arxiv: ["astro-ph.IM", "eess.IV"]
+    biorxiv: []
+    openalex: "image formation measurement operator astronomy"
+    semanticscholar: "image formation forward model interferometry"
+
+  - id: image-reconstruction
+    label: "Image Reconstruction"
+    keywords: ["image reconstruction", "inverse problem", "regularization", "iterative reconstruction", "tomography"]
+    arxiv: ["astro-ph.IM", "eess.IV", "cs.CV"]
+    biorxiv: []
+    openalex: "image reconstruction inverse problems regularization"
+    semanticscholar: "astronomical image reconstruction inverse problem"
+
+  - id: compressed-sensing
+    label: "Compressed Sensing"
+    keywords: ["compressed sensing", "compressive sensing", "sparse reconstruction", "l1 minimization", "Faraday depth"]
+    arxiv: ["cs.IT", "math.OC", "eess.SP", "astro-ph.IM"]
+    biorxiv: []
+    openalex: "compressed sensing sparse reconstruction Faraday"
+    semanticscholar: "compressed sensing Faraday depth reconstruction"
+
   - id: chemistry
     label: "Chemistry"
     keywords: ["synthesis", "catalysis", "molecule", "reaction", "compound"]

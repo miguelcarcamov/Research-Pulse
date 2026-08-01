@@ -43,22 +43,46 @@ class TestParseLogic:
         assert subs[0].token == "tok1"
 
 
+def _secrets(**overrides) -> Secrets:
+    base = dict(
+        subscribers_csv_url="",
+        smtp_host="",
+        smtp_port=587,
+        smtp_user="",
+        smtp_key="",
+        sender_email="",
+        sender_name="",
+        site_url="",
+        groq_api_key="",
+        gemini_api_key="",
+        ollama_host="",
+        ollama_model="",
+        digest_email="",
+        digest_topics="",
+    )
+    base.update(overrides)
+    return Secrets(**base)
+
+
 class TestLoadSubscribers:
-    def test_mocked_remote_csv(self):
-        secrets = Secrets(
-            subscribers_csv_url="https://example.com/subs.csv",
-            smtp_host="",
-            smtp_port=587,
-            smtp_user="",
-            smtp_key="",
-            sender_email="",
-            sender_name="",
-            site_url="",
-            groq_api_key="",
-            gemini_api_key="",
-            ollama_host="",
-            ollama_model="",
+    def test_digest_email_personal_mode(self):
+        secrets = _secrets(
+            digest_email="me@gmail.com",
+            digest_topics="ai-ml;nlp",
         )
+        subs = load_subscribers(secrets)
+        assert len(subs) == 1
+        assert subs[0].email == "me@gmail.com"
+        assert subs[0].topics == ["ai-ml", "nlp"]
+
+    def test_digest_email_default_topics(self):
+        secrets = _secrets(digest_email="me@gmail.com")
+        subs = load_subscribers(secrets)
+        assert len(subs) == 1
+        assert "ai-ml" in subs[0].topics
+
+    def test_mocked_remote_csv(self):
+        secrets = _secrets(subscribers_csv_url="https://example.com/subs.csv")
         mock_resp = MagicMock()
         mock_resp.text = "email,topics,confirmed,token\na@b.com,nlp,yes,t\n"
         with patch("research_agent.subscribers.get", return_value=mock_resp):

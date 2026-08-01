@@ -137,6 +137,9 @@ class Secrets:
     gemini_api_key: str
     ollama_host: str
     ollama_model: str
+    # Personal digest: single recipient without a subscribers CSV.
+    digest_email: str = ""
+    digest_topics: str = ""
 
 
 def load_topics(path: Optional[Path] = None) -> Tuple[List[Topic], List[NewsFeed]]:
@@ -189,6 +192,8 @@ def load_secrets() -> Secrets:
         gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
         ollama_host=os.environ.get("OLLAMA_HOST", "").strip().rstrip("/"),
         ollama_model=os.environ.get("OLLAMA_MODEL", "llama3.2").strip(),
+        digest_email=os.environ.get("DIGEST_EMAIL", "").strip(),
+        digest_topics=os.environ.get("DIGEST_TOPICS", "").strip(),
     )
 
 

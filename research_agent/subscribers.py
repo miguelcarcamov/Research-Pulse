@@ -1,10 +1,11 @@
 """Read the subscriber list.
 
-Source of truth is a Google Sheet, written by the Apps Script web app and
-exposed as a published CSV (no auth needed to read). For local development we
-fall back to config/subscribers.sample.csv.
+Priority:
+  1. DIGEST_EMAIL (+ optional DIGEST_TOPICS) for a personal single-recipient setup
+  2. Published Google Sheet CSV (SUBSCRIBERS_CSV_URL)
+  3. config/subscribers.sample.csv for local testing
 
-Expected columns (header row, case-insensitive):
+Expected CSV columns (header row, case-insensitive):
     email, topics, confirmed, token
 `topics` is a ';'-separated list of topic ids; `confirmed` is true/yes/1.
 """
@@ -21,6 +22,9 @@ from .log import get as _log
 from .sources.http import get
 
 log = _log("subscribers")
+
+# Used when DIGEST_EMAIL is set but DIGEST_TOPICS is empty.
+_DEFAULT_DIGEST_TOPICS = ["ai-ml", "nlp", "bioinformatics", "medicine"]
 
 
 @dataclass
@@ -61,7 +65,12 @@ def _parse_csv(text: str) -> List[Subscriber]:
 
 
 def load_subscribers(secrets: Secrets) -> List[Subscriber]:
-    """Load confirmed subscribers from the published CSV, or the local sample."""
+    """Load confirmed subscribers from DIGEST_EMAIL, CSV URL, or the local sample."""
+    if secrets.digest_email and "@" in secrets.digest_email:
+        topics = _split_topics(secrets.digest_topics) or list(_DEFAULT_DIGEST_TOPICS)
+        log.info("personal digest mode -> %s (%d topic(s))", secrets.digest_email, len(topics))
+        return [Subscriber(email=secrets.digest_email, topics=topics, token="digest-email")]
+
     if secrets.subscribers_csv_url:
         resp = get(secrets.subscribers_csv_url)
         if resp is not None and resp.text.strip():
